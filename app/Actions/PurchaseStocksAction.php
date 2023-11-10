@@ -14,8 +14,8 @@ class PurchaseStocksAction
         $this->brokerService = new BrokerApiService();
         // Аутентификация и получение streamSessionId
         $this->streamSessionId = $this->brokerService->login(
-            config('xtb.credentials.userId'),
-            config('xtb.credentials.password')
+            config('xtb.userId'),
+            config('xtb.password')
         );
     }
 

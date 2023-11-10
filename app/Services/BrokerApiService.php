@@ -4,33 +4,45 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
 use Illuminate\Http\Client\Response;
-
+use WebSocket\Client;
 
 class BrokerApiService
 {
     private string $apiUrl;
-    private $httpClient;
+    private Client $сlient;
 
     public function __construct()
     {
-        $this->apiUrl = config('xtb.api_url');
-        $this->httpClient = new Http();
+        $this->apiUrl = config('xtb.api_url'); // wss://ws.xtb.com/demo
+        $this->client = new Client($this->apiUrl);
+    }
+
+    private function sendRequest(string $command, array $arguments = [], ?string $streamSessionId = null): array
+    {
+        $payload = json_encode([
+            'command' => $command,
+            'arguments' => $arguments,
+            'streamSessionId' => $streamSessionId
+        ]);
+
+        $this->client->send($payload);
+        $response = json_decode($this->client->receive(), true);
+
+        if (isset($response['status']) && $response['status']) {
+            return $response;
+        } else {
+            throw new \Exception('Error communicating with broker API: ' . json_encode($response));
+        }
     }
 
     public function login(string $userId, string $password, ?string $appId = null, ?string $appName = null): string
     {
         $arguments = [
             'userId' => $userId,
-            'password' => $password
+            'password' => $password,
+            'appId' => $appId ?? 'defaultAppId',
+            'appName' => $appName ?? 'defaultAppName'
         ];
-
-        if ($appId !== null) {
-            $arguments['appId'] = $appId;
-        }
-
-        if ($appName !== null) {
-            $arguments['appName'] = $appName;
-        }
 
         $response = $this->sendRequest('login', $arguments);
 
@@ -89,26 +101,6 @@ class BrokerApiService
             return $response['returnData'];
         } else {
             throw new \Exception('Unable to get trading hours: ' . $response['errorDescr']);
-        }
-    }
-
-    private function sendRequest(string $command, array $arguments = [], ?string $streamSessionId = null): array
-    {
-        $payload = [
-            'command' => $command,
-            'arguments' => $arguments
-        ];
-
-        if ($streamSessionId) {
-            $payload['streamSessionId'] = $streamSessionId;
-        }
-
-        $response = $this->httpClient::post($this->apiUrl, $payload);
-
-        if ($response->successful()) {
-            return $response->json();
-        } else {
-            throw new \Exception('Error communicating with broker API: ' . $response->body());
         }
     }
 }
