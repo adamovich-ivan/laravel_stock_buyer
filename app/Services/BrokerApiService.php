@@ -17,15 +17,18 @@ class BrokerApiService
         $this->client = new Client($this->apiUrl);
     }
 
-    private function sendRequest(string $command, array $arguments = [], ?string $streamSessionId = null): array
+    private function sendRequest(string $command, $arguments = [], ?string $streamSessionId = null): array
     {
-        $payload = json_encode([
+        // Использование stdClass для представления пустого объекта в JSON, если массив аргументов пуст
+        $payload = [
             'command' => $command,
-            'arguments' => $arguments,
+            'arguments' => empty($arguments) ? new \stdClass() : $arguments,
             'streamSessionId' => $streamSessionId
-        ]);
+        ];
 
-        $this->client->send($payload);
+        $jsonPayload = json_encode($payload);
+
+        $this->client->send($jsonPayload);
         $response = json_decode($this->client->receive(), true);
 
         if (isset($response['status']) && $response['status']) {
@@ -34,6 +37,7 @@ class BrokerApiService
             throw new \Exception('Error communicating with broker API: ' . json_encode($response));
         }
     }
+
 
     public function login(string $userId, string $password, ?string $appId = null, ?string $appName = null): string
     {
@@ -101,6 +105,26 @@ class BrokerApiService
             return $response['returnData'];
         } else {
             throw new \Exception('Unable to get trading hours: ' . $response['errorDescr']);
+        }
+    }
+
+    public function tradeTransaction(array $tradeTransInfo, string $streamSessionId): array
+    {
+        // Подготовка аргументов для запроса
+        $arguments = [
+            'tradeTransInfo' => $tradeTransInfo
+        ];
+
+        $response = $this->sendRequest('tradeTransaction', $arguments, $streamSessionId);
+
+        // Проверка статуса запроса и обработка ответа
+        if ($response['status'] === true) {
+            // При успешном получении запроса сервером
+            // Необходимо использовать tradeTransactionStatus для проверки статуса транзакции
+            return $response;
+        } else {
+            // Обработка ошибок
+            throw new \Exception('Trade transaction failed: ' . $response['errorDescr']);
         }
     }
 }

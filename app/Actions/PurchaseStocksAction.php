@@ -3,20 +3,24 @@
 namespace App\Actions;
 
 use App\Services\BrokerApiService;
+use DateTime;
+use DateTimeZone;
 
 class PurchaseStocksAction
 {
-    private BrokerApiService $brokerService;
+    private BrokerApiService $brokerApiService;
     private string $streamSessionId;
 
     public function __construct()
     {
-        $this->brokerService = new BrokerApiService();
+        $this->brokerApiService = new BrokerApiService();
         // Аутентификация и получение streamSessionId
-        $this->streamSessionId = $this->brokerService->login(
+        $this->streamSessionId = $this->brokerApiService->login(
             config('xtb.userId'),
             config('xtb.password')
         );
+
+
     }
 
     public function execute(array $companies): array
@@ -24,10 +28,11 @@ class PurchaseStocksAction
         $purchaseResults = [];
 
         foreach ($companies as $company) {
-            $symbolInfo = $this->brokerService->getSymbol($company['symbol'], $this->streamSessionId);
+            $symbolInfo = $this->brokerApiService->getSymbol($company['symbol'], $this->streamSessionId);
 
             // Проверяем, доступна ли компания для покупки, и выполняем покупку
-            if ($this->isTradable($symbolInfo)) {
+//            dd($this->isTradable($company));
+            if ($this->isTradable($company)) {
                 $tradeTransInfo = [
                     'cmd' => 0, // Команда BUY
                     'symbol' => $company['symbol'],
@@ -35,38 +40,77 @@ class PurchaseStocksAction
                     // Другие необходимые параметры транзакции
                 ];
 
-                $transactionResult = $this->brokerService->tradeTransaction($tradeTransInfo, $this->streamSessionId);
+                $transactionResult = $this->brokerApiService->tradeTransaction($tradeTransInfo, $this->streamSessionId);
                 $purchaseResults[] = $transactionResult;
             }
         }
 
         // После выполнения операций выходим из системы
-        $this->brokerService->logout($this->streamSessionId);
+
+        $this->brokerApiService->logout($this->streamSessionId);
 
         return $purchaseResults;
     }
 
-    private function isTradable(array $company, string $streamSessionId): bool
+    private function isTradable(array $company): bool
     {
-        // Получаем торговые часы для символа
-        $tradingHours = $this->brokerService->getTradingHours([$company['symbol']], $streamSessionId);
 
-        // Предполагаем, что $tradingHours содержит массив с информацией о торговых часах
-        // Проверяем, является ли текущее время торговым временем для символа
+        if (!$this->isWithinTradingHours($company['symbol'])) {
+            return false;
+        }
+
+        return $this->hasNoCommission($company['symbol'], $company['volume']);
+    }
+
+    private function isWithinTradingHours(string $symbol): bool
+    {
+        $tradingHoursData = $this->brokerApiService->getTradingHours([$symbol], $this->streamSessionId);
+        $tradingHours = $tradingHoursData[0]['trading']; // Получение данных о торговых часах
         $currentTime = time();
-        $isWithinTradingHours = false;
+
+        $currentCetTime = $this->convertToCetTime($currentTime);
+        $currentDayOfWeek = date('N', $currentTime);
+
         foreach ($tradingHours as $record) {
-            if ($currentTime >= strtotime($record['openTime']) && $currentTime <= strtotime($record['closeTime'])) {
-                $isWithinTradingHours = true;
-                break;
+            if ($record['day'] == $currentDayOfWeek) {
+                $fromTime = $this->convertMillisecondsToTime($record['fromT']);
+                $toTime = $this->convertMillisecondsToTime($record['toT']);
+
+                if ($currentCetTime >= $fromTime && $currentCetTime <= $toTime) {
+                    return true;
+                }
             }
         }
 
-        // Проверяем комиссию
-        $commissionInfo = $this->brokerService->getCommissionDef($company['symbol'], $company['volume'], $streamSessionId);
-        $hasNoCommission = $commissionInfo['commission'] == 0;
-
-        return $isWithinTradingHours && $hasNoCommission;
+        return false;
     }
+
+    private function convertToCetTime($time): int
+    {
+        $dateTime = new DateTime("@$time");
+        $dateTime->setTimezone(new DateTimeZone('Europe/Paris')); // CET/CEST
+        return $dateTime->getTimestamp();
+    }
+
+    private function convertMillisecondsToTime($milliseconds): int
+    {
+        // Преобразование миллисекунд в часы и минуты
+        $hours = floor($milliseconds / 3600000);
+        $minutes = floor(($milliseconds % 3600000) / 60000);
+        $seconds = floor(($milliseconds % 60000) / 1000);
+
+        // Сборка времени в формате 'H:i:s' и конвертация в Unix timestamp
+        $time = sprintf('%02d:%02d:%02d', $hours, $minutes, $seconds);
+        $dateTime = DateTime::createFromFormat('H:i:s', $time, new DateTimeZone('Europe/Paris'));
+        return $dateTime->getTimestamp();
+    }
+
+
+    private function hasNoCommission(string $symbol, float $volume): bool
+    {
+        $commissionInfo = $this->brokerApiService->getCommissionDef($symbol, $volume, $this->streamSessionId);
+        return $commissionInfo['commission'] == 0;
+    }
+
 
 }
