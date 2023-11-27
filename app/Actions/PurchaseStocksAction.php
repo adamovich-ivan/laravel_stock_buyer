@@ -29,7 +29,7 @@ class PurchaseStocksAction
 
         foreach ($companies as $company) {
             $symbolInfo = $this->brokerApiService->getSymbol($company['symbol'], $this->streamSessionId);
-
+            dd($symbolInfo);
             // Проверяем, доступна ли компания для покупки, и выполняем покупку
 //            dd($this->isTradable($company));
             if ($this->isTradable($company)) {
@@ -37,7 +37,18 @@ class PurchaseStocksAction
                     'cmd' => 0, // Команда BUY
                     'symbol' => $company['symbol'],
                     'volume' => $company['volume'],
-                    // Другие необходимые параметры транзакции
+                    'price' => 1,
+                    // price: Floating number (Цена)
+
+                    // customComment: String (Комментарий пользователя)
+                    // expiration: Number (Время окончания действия)
+                    // offset: Number (Сдвиг)
+                    // order: Number (Номер ордера)
+                    // sl: Floating number (Stop loss)
+                    // tp: Floating number (Take profit)
+                    // symbol: String (Тикер инструмента)
+                    // type: Number (Тип транзакции)
+
                 ];
 
                 $transactionResult = $this->brokerApiService->tradeTransaction($tradeTransInfo, $this->streamSessionId);

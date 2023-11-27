@@ -20,9 +20,9 @@ class PurchaseStocks extends Command
         $purchaseStocksAction = new PurchaseStocksAction();
 
         $companies = [
-            ['symbol' => 'HALO.US_4', 'volume' => 1.0],
-            ['symbol' => 'USDCAD', 'volume' => 1.0],
-//            ['symbol' => 'MSFT', 'volume' => 1.0]
+            ['symbol' => 'PZU.PL_4', 'volume' => 1.0],
+            ['symbol' => 'LPP.PL_4', 'volume' => 1], // крипта STEPN
+            ['symbol' => 'PKN.PL_4', 'volume' => 1.0],
         ];
 
         try {
