@@ -2,14 +2,13 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Facades\Http;
-use Illuminate\Http\Client\Response;
 use WebSocket\Client;
 
 class BrokerApiService
 {
+    private Client $client;
     private string $apiUrl;
-    private Client $сlient;
+    private ?string $streamSessionId = null;
 
     public function __construct()
     {
@@ -17,56 +16,63 @@ class BrokerApiService
         $this->client = new Client($this->apiUrl);
     }
 
-    private function sendRequest(string $command, $arguments = [], ?string $streamSessionId = null): array
+    private function sendRequest(string $command, $arguments = []): array
     {
-        // Использование stdClass для представления пустого объекта в JSON, если массив аргументов пуст
+        // Исключение для команды login, которая не требует streamSessionId
+        if ($command !== 'login' && !$this->streamSessionId) {
+            throw new \Exception('Session ID is not set.');
+        }
+    
         $payload = [
             'command' => $command,
             'arguments' => empty($arguments) ? new \stdClass() : $arguments,
-            'streamSessionId' => $streamSessionId
         ];
-
+    
+        // Добавление streamSessionId в пакет данных, если он установлен и команда не login
+        if ($this->streamSessionId && $command !== 'login') {
+            $payload['streamSessionId'] = $this->streamSessionId;
+        }
+    
         $jsonPayload = json_encode($payload);
-
+    
         $this->client->send($jsonPayload);
         $response = json_decode($this->client->receive(), true);
-
+    
         if (isset($response['status']) && $response['status']) {
             return $response;
         } else {
             throw new \Exception('Error communicating with broker API: ' . json_encode($response));
         }
     }
+    
 
-
-    public function login(string $userId, string $password, ?string $appId = null, ?string $appName = null): string
+    public function login(string $userId, string $password): string
     {
         $arguments = [
             'userId' => $userId,
             'password' => $password,
-            'appId' => $appId ?? 'defaultAppId',
-            'appName' => $appName ?? 'defaultAppName'
         ];
 
         $response = $this->sendRequest('login', $arguments);
 
         if ($response['status'] === true && isset($response['streamSessionId'])) {
-            return $response['streamSessionId'];
+            $this->streamSessionId = $response['streamSessionId'];
+            return $this->streamSessionId;
         } else {
             throw new \Exception('Login failed: ' . $response['errorDescr']);
         }
     }
 
-    public function logout(string $streamSessionId): bool
+    public function logout(): bool
     {
-        $response = $this->sendRequest('logout', [], $streamSessionId);
+        $response = $this->sendRequest('logout');
 
         return $response['status'] === true;
     }
 
-    public function getBalance(string $streamSessionId): array
+    public function getBalance(): array
     {
-        $response = $this->sendRequest('getMarginLevel', [], $streamSessionId);
+        $response = $this->sendRequest('getMarginLevel');
 
         if ($response['status'] === true && isset($response['returnData'])) {
             return $response['returnData'];
@@ -75,9 +81,9 @@ class BrokerApiService
         }
     }
 
-    public function getSymbol(string $symbol, string $streamSessionId): array
+    public function getSymbol(string $symbol): array
     {
-        $response = $this->sendRequest('getSymbol', ['symbol' => $symbol], $streamSessionId);
+        $response = $this->sendRequest('getSymbol', ['symbol' => $symbol]);
 
         if ($response['status'] === true && isset($response['returnData'])) {
             return $response['returnData'];
@@ -86,9 +92,9 @@ class BrokerApiService
         }
     }
 
-    public function getCommissionDef(string $symbol, float $volume, string $streamSessionId): array
+    public function getCommissionDef(string $symbol, float $volume): array
     {
-        $response = $this->sendRequest('getCommissionDef', ['symbol' => $symbol, 'volume' => $volume], $streamSessionId);
+        $response = $this->sendRequest('getCommissionDef', ['symbol' => $symbol, 'volume' => $volume]);
 
         if ($response['status'] === true && isset($response['returnData']) && $response['returnData']['commission'] != 0) {
             throw new \Exception("Commission for symbol {$symbol} is not zero: " . $response['returnData']['commission']);
@@ -97,9 +103,9 @@ class BrokerApiService
         return $response['returnData'];
     }
 
-    public function getTradingHours(array $symbols, string $streamSessionId): array
+    public function getTradingHours(array $symbols): array
     {
-        $response = $this->sendRequest('getTradingHours', ['symbols' => $symbols], $streamSessionId);
+        $response = $this->sendRequest('getTradingHours', ['symbols' => $symbols]);
 
         if ($response['status'] === true && isset($response['returnData'])) {
             return $response['returnData'];
@@ -108,22 +114,30 @@ class BrokerApiService
         }
     }
 
-    public function tradeTransaction(array $tradeTransInfo, string $streamSessionId): array
+    public function buyNow($symbol, $volume)
     {
-        // Подготовка аргументов для запроса
-        $arguments = [
-            'tradeTransInfo' => $tradeTransInfo
-        ];
+        $this->tradeTransaction(['cmd' => 0, 'symbol' => $symbol, 'volume' => $volume]);
+    }
 
-        $response = $this->sendRequest('tradeTransaction', $arguments, $streamSessionId);
+    public function sellNow($orderId)
+    {
+        // Здесь должна быть реализация метода sellNow
+    }
 
-        // Проверка статуса запроса и обработка ответа
+    public function sellLimit($orderId, $price)
+    {
+        // Здесь должна быть реализация метода sellLimit
+    }
+
+    private function tradeTransaction(array $tradeTransInfo): array
+    {
+        $arguments = ['tradeTransInfo' => $tradeTransInfo];
+
+        $response = $this->sendRequest('tradeTransaction', $arguments);
+
         if ($response['status'] === true) {
-            // При успешном получении запроса сервером
-            // Необходимо использовать tradeTransactionStatus для проверки статуса транзакции
             return $response;
         } else {
-            // Обработка ошибок
             throw new \Exception('Trade transaction failed: ' . $response['errorDescr']);
         }
     }

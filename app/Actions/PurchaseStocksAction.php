@@ -29,9 +29,9 @@ class PurchaseStocksAction
 
         foreach ($companies as $company) {
             $symbolInfo = $this->brokerApiService->getSymbol($company['symbol'], $this->streamSessionId);
-            dd($symbolInfo);
+            // dd($symbolInfo);
             // Проверяем, доступна ли компания для покупки, и выполняем покупку
-//            dd($this->isTradable($company));
+            // dd($this->isTradable($company));
             if ($this->isTradable($company)) {
                 $tradeTransInfo = [
                     'cmd' => 0, // Команда BUY
