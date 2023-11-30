@@ -5,6 +5,7 @@ namespace App\Actions;
 use App\Services\BrokerApiService;
 use DateTime;
 use DateTimeZone;
+use Mockery\Exception;
 
 class PurchaseStocksAction
 {
@@ -19,8 +20,6 @@ class PurchaseStocksAction
             config('xtb.userId'),
             config('xtb.password')
         );
-
-
     }
 
     public function execute(array $companies): array
@@ -29,36 +28,17 @@ class PurchaseStocksAction
 
         foreach ($companies as $company) {
             $symbolInfo = $this->brokerApiService->getSymbol($company['symbol'], $this->streamSessionId);
-            // dd($symbolInfo);
-            // Проверяем, доступна ли компания для покупки, и выполняем покупку
-            // dd($this->isTradable($company));
+
             if ($this->isTradable($company)) {
-                $tradeTransInfo = [
-                    'cmd' => 0, // Команда BUY
-                    'symbol' => $company['symbol'],
-                    'volume' => $company['volume'],
-                    'price' => 1,
-                    // price: Floating number (Цена)
-
-                    // customComment: String (Комментарий пользователя)
-                    // expiration: Number (Время окончания действия)
-                    // offset: Number (Сдвиг)
-                    // order: Number (Номер ордера)
-                    // sl: Floating number (Stop loss)
-                    // tp: Floating number (Take profit)
-                    // symbol: String (Тикер инструмента)
-                    // type: Number (Тип транзакции)
-
-                ];
-
-                $transactionResult = $this->brokerApiService->tradeTransaction($tradeTransInfo, $this->streamSessionId);
+                $transactionResult = $this->brokerApiService->buy($company['symbol'], $company['volume']);
                 $purchaseResults[] = $transactionResult;
             }
+            else throw new \Exception('not traidable');
+
+
         }
 
-        // После выполнения операций выходим из системы
-
-        $this->brokerApiService->logout($this->streamSessionId);
+        $this->brokerApiService->logout();
 
         return $purchaseResults;
     }
@@ -67,6 +47,10 @@ class PurchaseStocksAction
     {
 
         if (!$this->isWithinTradingHours($company['symbol'])) {
+            return false;
+        }
+
+        if (!$this->isVolumeValid($company['symbol'],$company['volume'] )) {
             return false;
         }
 
@@ -96,6 +80,19 @@ class PurchaseStocksAction
         return false;
     }
 
+    private function isVolumeValid(string $symbol, float $volume): bool
+    {
+        $symbolInfo = $this->brokerApiService->getSymbol($symbol);
+
+        if ($volume < $symbolInfo['lotMin']) {
+            // Объем меньше минимального
+            return false;
+        }
+
+        // Объем равен или больше минимального
+        return true;
+    }
+
     private function convertToCetTime($time): int
     {
         $dateTime = new DateTime("@$time");
@@ -116,12 +113,10 @@ class PurchaseStocksAction
         return $dateTime->getTimestamp();
     }
 
-
     private function hasNoCommission(string $symbol, float $volume): bool
     {
         $commissionInfo = $this->brokerApiService->getCommissionDef($symbol, $volume, $this->streamSessionId);
         return $commissionInfo['commission'] == 0;
     }
-
 
 }

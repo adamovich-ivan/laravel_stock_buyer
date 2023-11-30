@@ -9,6 +9,7 @@ class BrokerApiService
     private Client $client;
     private string $apiUrl;
     private ?string $streamSessionId = null;
+    private $lastRequestTime = 0;
 
     public function __construct()
     {
@@ -16,35 +17,48 @@ class BrokerApiService
         $this->client = new Client($this->apiUrl);
     }
 
+    private function applyRequestTrottling(): void
+    {
+        $currentTime = microtime(true);
+        $timeSinceLastRequest = $currentTime - $this->lastRequestTime;
+
+        if ($timeSinceLastRequest < 0.2) {
+            usleep((0.2 - $timeSinceLastRequest) * 1000000);
+        }
+
+        $this->lastRequestTime = microtime(true);
+    }
+
     private function sendRequest(string $command, $arguments = []): array
     {
-        // Исключение для команды login, которая не требует streamSessionId
+
         if ($command !== 'login' && !$this->streamSessionId) {
             throw new \Exception('Session ID is not set.');
         }
-    
+
         $payload = [
             'command' => $command,
             'arguments' => empty($arguments) ? new \stdClass() : $arguments,
         ];
-    
-        // Добавление streamSessionId в пакет данных, если он установлен и команда не login
+
         if ($this->streamSessionId && $command !== 'login') {
             $payload['streamSessionId'] = $this->streamSessionId;
         }
-    
+
         $jsonPayload = json_encode($payload);
-    
+
+        $this->applyRequestTrottling();
+
         $this->client->send($jsonPayload);
         $response = json_decode($this->client->receive(), true);
-    
+
         if (isset($response['status']) && $response['status']) {
             return $response;
         } else {
             throw new \Exception('Error communicating with broker API: ' . json_encode($response));
         }
     }
-    
+
 
     public function login(string $userId, string $password): string
     {
@@ -114,25 +128,74 @@ class BrokerApiService
         }
     }
 
-    public function buyNow($symbol, $volume)
+    public function buy(string $symbol, float $volume): array
     {
-        $this->tradeTransaction(['cmd' => 0, 'symbol' => $symbol, 'volume' => $volume]);
+        return $this->tradeTransaction([
+            'cmd' => 0, // BUY
+            'symbol' => $symbol,
+            'volume' => $volume,
+            'price' => 1, //just for correct work of transaction
+            // Добавьте другие необходимые параметры сюда
+        ]);
     }
 
-    public function sellNow($orderId)
+    public function sell(string $symbol, float $volume): array
     {
-        // Здесь должна быть реализация метода sellNow
+        return $this->tradeTransaction([
+            'cmd' => 1, // SELL
+            'symbol' => $symbol,
+            'volume' => $volume
+            // Добавьте другие необходимые параметры сюда
+        ]);
     }
 
-    public function sellLimit($orderId, $price)
+    public function buyLimit(string $symbol, float $volume, float $price): array
     {
-        // Здесь должна быть реализация метода sellLimit
+        return $this->tradeTransaction([
+            'cmd' => 2, // BUY_LIMIT
+            'symbol' => $symbol,
+            'volume' => $volume,
+            'price' => $price
+            // Добавьте другие необходимые параметры сюда
+        ]);
+    }
+
+    public function sellLimit(string $symbol, float $volume, float $price): array
+    {
+        return $this->tradeTransaction([
+            'cmd' => 3, // SELL_LIMIT
+            'symbol' => $symbol,
+            'volume' => $volume,
+            'price' => $price
+            // Добавьте другие необходимые параметры сюда
+        ]);
+    }
+
+    public function buyStop(string $symbol, float $volume, float $price): array
+    {
+        return $this->tradeTransaction([
+            'cmd' => 4, // BUY_STOP
+            'symbol' => $symbol,
+            'volume' => $volume,
+            'price' => $price
+            // Добавьте другие необходимые параметры сюда
+        ]);
+    }
+
+    public function sellStop(string $symbol, float $volume, float $price): array
+    {
+        return $this->tradeTransaction([
+            'cmd' => 5, // SELL_STOP
+            'symbol' => $symbol,
+            'volume' => $volume,
+            'price' => $price
+            // Добавьте другие необходимые параметры сюда
+        ]);
     }
 
     private function tradeTransaction(array $tradeTransInfo): array
     {
         $arguments = ['tradeTransInfo' => $tradeTransInfo];
-
         $response = $this->sendRequest('tradeTransaction', $arguments);
 
         if ($response['status'] === true) {
@@ -141,4 +204,9 @@ class BrokerApiService
             throw new \Exception('Trade transaction failed: ' . $response['errorDescr']);
         }
     }
+
+
+
+
+
 }
