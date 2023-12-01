@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Services\ArrayTransformer;
 use App\Services\GoogleSheetService;
 use Exception;
 use Illuminate\Console\Command;
@@ -18,10 +19,11 @@ class ExecutePurchaseStocks extends Command
     {
 
         $spreadsheetId = config('google.sheet_id');// ID таблицы Google Sheets
-        $range = 'WIG30!A1:I'; // Диапазон ячеек для извлечения данных
+        $range = 'WIG30!A1:J31'; // Диапазон ячеек для извлечения данных
         $googleSheetService = new GoogleSheetService($spreadsheetId);
         $data = $googleSheetService->getSpreadsheetData($range);
-        dd($data);
+//        dd($data);
+        dd(ArrayTransformer::transformToAssociative( $data));
 
 
 
