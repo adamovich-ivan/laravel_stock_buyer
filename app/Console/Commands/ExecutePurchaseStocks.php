@@ -8,6 +8,7 @@ use Exception;
 use Illuminate\Console\Command;
 use App\Actions\PurchaseStocksAction;
 use App\Services\BrokerApiService;
+use Illuminate\Support\Arr;
 
 class ExecutePurchaseStocks extends Command
 {
@@ -17,33 +18,21 @@ class ExecutePurchaseStocks extends Command
 
     public function handle()
     {
-
         $spreadsheetId = config('google.sheet_id');// ID таблицы Google Sheets
         $range = 'WIG30!A1:J31'; // Диапазон ячеек для извлечения данных
         $googleSheetService = new GoogleSheetService($spreadsheetId);
         $data = $googleSheetService->getSpreadsheetData($range);
-//        dd($data);
-        dd(ArrayTransformer::transformToAssociative( $data));
 
+        $data = (ArrayTransformer::transformToAssociative($data));
 
+        $companies_for_purchase = ArrayTransformer::transformArrayForBuying($data);
+        $purchaseStocksAction = new PurchaseStocksAction();
 
-//        $purchaseStocksAction = new PurchaseStocksAction();
-//        $companies = [
-////            ['symbol' => 'SUSHI', 'volume' => 100.0],
-////            ['symbol' => 'STEPN', 'volume' => 250.0],
-////            ['symbol' => 'KUSAMA', 'volume' => 1.0],
-////            ['symbol' => 'GALA', 'volume' => 2500.0],
-////            ['symbol' => 'GRAPH', 'volume' => 1000.0],
-////            ['symbol' => 'PZU.PL_4', 'volume' => 1.0],
-////            ['symbol' => 'LPP.PL_4', 'volume' => 1], // крипта STEPN
-////            ['symbol' => 'PKN.PL_4', 'volume' => 1.0],
-//        ];
-//
-//        try {
-//            $purchaseResults = $purchaseStocksAction->execute($companies);
-//            $this->info('Stocks have been successfully purchased.');
-//        } catch (Exception $e) {
-//            $this->error("An error occurred: " . $e->getMessage());
-//        }
+        try {
+            $purchaseResults = $purchaseStocksAction->execute($companies_for_purchase);
+            $this->info('Stocks have been successfully purchased.');
+        } catch (Exception $e) {
+            $this->error("An error occurred: " . $e->getMessage());
+        }
     }
 }

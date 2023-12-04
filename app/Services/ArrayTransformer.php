@@ -39,5 +39,23 @@ class ArrayTransformer
 
         return $associativeArray;
     }
+
+
+    public static function transformArrayForBuying($originalArray): array
+    {
+        return array_map(function ($item) {
+            return [
+                'symbol' => $item['xtb api ticker'],
+                'volume' => self::formatVolume($item['Purchase volume'])
+            ];
+        }, $originalArray);
+    }
+
+    private static function formatVolume($volume)
+    {
+        $value = str_replace(',', '.', $volume);
+        return floatval($value);
+    }
+
 }
 
