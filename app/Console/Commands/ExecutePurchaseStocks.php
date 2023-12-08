@@ -19,7 +19,7 @@ class ExecutePurchaseStocks extends Command
     public function handle()
     {
         $spreadsheetId = config('google.sheet_id');// ID таблицы Google Sheets
-        $range = 'WIG30!A1:J31'; // Диапазон ячеек для извлечения данных
+        $range = config('google.range'); // Диапазон ячеек для извлечения данных
         $googleSheetService = new GoogleSheetService($spreadsheetId);
         $data = $googleSheetService->getSpreadsheetData($range);
 

@@ -109,11 +109,9 @@ class BrokerApiService
     public function getCommissionDef(string $symbol, float $volume): array
     {
         $response = $this->sendRequest('getCommissionDef', ['symbol' => $symbol, 'volume' => $volume]);
-
-        if ($response['status'] === true && isset($response['returnData']) && $response['returnData']['commission'] != 0) {
-            throw new \Exception("Commission for symbol {$symbol} is not zero: " . $response['returnData']['commission']);
-        }
-
+//        if ($response['status'] === true && isset($response['returnData']) && $response['returnData']['commission'] != 0) {
+//            throw new \Exception("Commission for symbol {$symbol} is not zero: " . $response['returnData']['commission']);
+//        }
         return $response['returnData'];
     }
 

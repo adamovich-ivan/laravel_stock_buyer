@@ -15,7 +15,6 @@ class PurchaseStocksAction
     public function __construct()
     {
         $this->brokerApiService = new BrokerApiService();
-        // Аутентификация и получение streamSessionId
         $this->streamSessionId = $this->brokerApiService->login(
             config('xtb.userId'),
             config('xtb.password')
@@ -27,15 +26,15 @@ class PurchaseStocksAction
         $purchaseResults = [];
 
         foreach ($companies as $company) {
-            $symbolInfo = $this->brokerApiService->getSymbol($company['symbol'], $this->streamSessionId);
+            $symbolInfo = $this->brokerApiService->getSymbol($company['symbol']);
 
             if ($this->isTradable($company)) {
-                $transactionResult = $this->brokerApiService->buy($company['symbol'], $company['volume']);
+                $transactionResult = $this->brokerApiService->buy($company['symbol'], 4);
+                dd( $company['symbol'], $company['volume'] ,$transactionResult);
+
                 $purchaseResults[] = $transactionResult;
             }
-            else throw new \Exception('not traidable');
-
-
+            else throw new \Exception('is not traidable');
         }
 
         $this->brokerApiService->logout();
@@ -54,12 +53,16 @@ class PurchaseStocksAction
             return false;
         }
 
-        return $this->hasNoCommission($company['symbol'], $company['volume']);
+//        if (! $this->isComission($company['symbol'], $company['volume'])){
+//            return false;
+//        }
+
+        return true;
     }
 
     private function isWithinTradingHours(string $symbol): bool
     {
-        $tradingHoursData = $this->brokerApiService->getTradingHours([$symbol], $this->streamSessionId);
+        $tradingHoursData = $this->brokerApiService->getTradingHours([$symbol]);
         $tradingHours = $tradingHoursData[0]['trading']; // Получение данных о торговых часах
         $currentTime = time();
 
@@ -113,9 +116,10 @@ class PurchaseStocksAction
         return $dateTime->getTimestamp();
     }
 
-    private function hasNoCommission(string $symbol, float $volume): bool
+    private function isComission(string $symbol, float $volume): bool
     {
-        $commissionInfo = $this->brokerApiService->getCommissionDef($symbol, $volume, $this->streamSessionId);
+        $commissionInfo = $this->brokerApiService->getCommissionDef($symbol, $volume);
+
         return $commissionInfo['commission'] == 0;
     }
 
